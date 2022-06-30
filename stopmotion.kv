@@ -1,0 +1,153 @@
+#:kivy 2.1.0
+<FilmStrip>:
+    size_hint: (1, None)
+    height: dp(60)
+    bar_width: dp(15)
+    bar_color: 1, 1, 1, 0.3   # red
+    bar_inactive_color: 1, 1, 1, 0   # blue
+    scroll_type: ['bars', 'content']
+    GridLayout:
+        id: _layout
+        rows: 1
+        spacing: 10
+        size_hint_x: None
+        width: self.minimum_width
+        
+                 
+<Chooser@Spinner>:
+    height: "30dp"
+    size_hint:(1,None)
+    text: 'Home'
+    values: 'Home', 'Work', 'Other', 'Custom'
+    on_text:
+        print("The spinner {} has text {}".format(self, self.text))
+
+<KivyCV>:
+    
+<SmallLabel@Label>:
+    height: "30dp"
+    size_hint: (1,None)
+
+<PreviewVideo>:
+    orientation: "vertical"
+    id: _preview_video
+    VideoPlayer:
+        source: "tmp.avi"
+        options: {"allow_stretch": True}
+    Button:
+        id: _video_preview_button
+        text: "Button"
+        size_hint: (None, 0.1)
+        pos_hint: {"center_x": 0.5}
+
+<PictureButton>:
+    group: 'pictures'
+    text: 'test'
+
+
+<LoadDialog>:
+    BoxLayout:
+        size: root.size
+        pos: root.pos
+        orientation: "vertical"
+        FileChooserListView:
+            id: filechooser
+            path: "./projects/"
+
+        BoxLayout:
+            size_hint_y: None
+            height: dp(30)
+            Button:
+                text: "Cancel"
+                on_release: root.cancel()
+
+            Button:
+                text: "Load"
+                on_release: root.load(filechooser.path, filechooser.selection)
+
+<AppLayout>:
+    orientation: 'horizontal'
+    spacing: "5dp"
+    padding: "5dp"
+    BoxLayout:
+        id: _first_box
+        orientation: 'vertical'
+        spacing: "5dp"
+        padding: "5dp"
+        KivyCV
+            id: _camera_view
+            size_hint: (1,1)
+        FilmStrip
+            id: _film_strip
+    BoxLayout:
+        orientation: 'vertical'
+        width: "120dp"
+        size_hint: (None, 1)
+        StackLayout:
+            orientation: 'lr-tb'
+            spacing: "5dp"
+            padding: "5dp"
+            size_hint: ( None, 1)
+            width: "120dp"
+            SmallLabel:
+                text: "F-stop"
+            Chooser:
+                id: _fstop_chooser
+            SmallLabel:
+                text: "Shutter"
+            Chooser:
+                id: _shutter_speed_chooser
+            SmallLabel:
+                text: "ISO"
+            Chooser:
+                id: _iso_chooser
+            SmallLabel:
+                text: "Project"
+            Button:
+                id: _load_button
+                text: "Open folder"
+                size_hint: (1,None)
+                height: dp(30)
+        StackLayout:
+            orientation: 'lr-bt'
+            size_hint: (None, 1)
+            width: dp(120)
+            padding: dp(5)
+            spacing: dp(5)
+            Button:
+                text: "Capture"
+                size_hint: (1, None)
+                height: dp(30)
+            Button:
+                text: "Test Shot"
+                size_hint: (1, None)
+                height: dp(30)
+        StackLayout:
+            orientation: 'lr-bt'
+            spacing: "5dp"
+            padding: "5dp"
+            size_hint: ( None, None)
+            width: "120dp"
+            height: dp(200)
+            Button:
+                id: _preview_button
+                text: "Preview"
+                height: dp(30)
+                size_hint: (1, None)
+            Slider:
+                id: _fps_slider
+                min: 2
+                max: 30
+                step: 0.5
+                orientation: 'horizontal'
+                height: dp(32)
+                size_hint: (1, None)
+                cursor_size: (dp(16), dp(16))
+                padding: dp(8)
+            Label:
+                text: f"fps: {str(_fps_slider.value)}"
+                height: dp(24)
+                size_hint: (1, None)
+
+
+        
