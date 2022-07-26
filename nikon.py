@@ -56,11 +56,17 @@ class Nikon:
 
     def capture_image(self):
         file_path = self.camera.capture(gp.GP_CAPTURE_IMAGE)
-        target = os.path.join(".", file_path.name)
-        print("Copying image to", target)
         camera_file = self.camera.file_get(file_path.folder, file_path.name, gp.GP_FILE_TYPE_NORMAL)
+
+        temp_name = "tmp-img.jpg"
+        target = os.path.join("/tmp", temp_name)
+        small_target = os.path.join("/tmp", f"small-{temp_name}")
+        print("Copying image to", target)
         camera_file.save(target)
-        return target
+
+        cmd = f"ffmpeg -y -i {target} -vf scale=2048:-1 {small_target}"
+        os.system(cmd)
+        return target, small_target
 
     def get_fstops(self):
         if (self.camera is None):

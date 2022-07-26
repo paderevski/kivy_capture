@@ -14,6 +14,8 @@ from kivy.uix.button import Button
 from kivy.uix.togglebutton import ToggleButton
 from kivy.uix.label import Label
 from kivy.uix.gridlayout import GridLayout
+from kivy.core.window import Window
+
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.scrollview import ScrollView
 from kivy.uix.popup import Popup
@@ -29,14 +31,19 @@ from kivy.graphics.context_instructions import Color
 from kivy.graphics.vertex_instructions import Rectangle, Line
 
 import os
-from numpy import take
+from numpy import take, true_divide
 from nikon import Nikon
 import cv2
+import random
 
 import glob
 
 LIVE_VIEW_WIDTH = 1024
 LIVE_VIEW_HEIGHT = 680
+
+root = None
+project_dir = ""
+app_dir = ""
 
 class KivyCV(Image):
     def my_init(self, camera, fps):
@@ -44,25 +51,59 @@ class KivyCV(Image):
         self.camera = camera
         self.allow_stretch = True
         Clock.schedule_interval(self.update, 1.0 / fps)
+        self.fps = fps
         self.print = True
         self.overlay = None
+        self.live = False
+        self.preview = None
+        self.image_is_selected = False
 
     def set_selected_overlay(self, overlay):
         self.overlay = cv2.flip(overlay, 0)
         self.overlay = cv2.resize(self.overlay, (LIVE_VIEW_WIDTH, LIVE_VIEW_HEIGHT))
 
-    def update(self, dt):
-        if self.camera.dummy:
-            jpg_frame = cv2.imread("./sample.jpg")
-            frame = cv2.resize(jpg_frame, (LIVE_VIEW_WIDTH,LIVE_VIEW_HEIGHT))
-        else:
-            jpg_frame = self.camera.get_frame()
-            frame = cv2.imdecode(jpg_frame, cv2.IMREAD_COLOR)
 
-        if self.overlay is not None:
-            merged_image = cv2.addWeighted(frame, 0.7, self.overlay, 0.3, 0)
+    def set_selected_preview(self, preview):
+        self.preview = cv2.flip(preview, 0)
+        self.preview = cv2.resize(self.preview, (LIVE_VIEW_WIDTH, LIVE_VIEW_HEIGHT))
+
+    def turn_live_on(self):
+        print("Live view turned on")
+        self.live = True
+        self.update(1/30)
+
+    def turn_live_off(self):
+        print("Live view turned off")
+        self.live = False
+        self.update(1/30)
+
+    def update(self, dt):
+        # self.preview is 100% if there's no live view
+        # self.overlay is 30% only if there's live view
+        if self.live:
+            if self.camera.dummy:
+                jpg_frame = cv2.imread("./no-camera.png")
+                frame = cv2.resize(jpg_frame, (LIVE_VIEW_WIDTH,LIVE_VIEW_HEIGHT))
+            else:
+                jpg_frame = self.camera.get_frame()
+                frame = cv2.imdecode(jpg_frame, cv2.IMREAD_COLOR)
+        else:
+            if self.preview is not None:
+                frame = self.preview
+            else:
+                jpg_frame = cv2.imread("./no-camera.png")
+                frame = cv2.resize(jpg_frame, (LIVE_VIEW_WIDTH,LIVE_VIEW_HEIGHT))
+
+        # the overlay should be the selected frame if any
+        # or the most recent frame if none 
+        #
+        # print(self.image_is_selected, self.overlay.shape)       
+        if self.image_is_selected and self.overlay is not None:
+            # merge frame and overlay
+            merged_image = cv2.addWeighted(self.overlay, 0.3, frame, 0.7, 0)
             buf = cv2.flip(merged_image, 0).tobytes()
         else:
+            # only show frame
             buf = cv2.flip(frame, 0). tobytes()
         image_texture = Texture.create(
             size=(frame.shape[1], frame.shape[0]), colorfmt='bgr')
@@ -76,10 +117,22 @@ class KivyCV(Image):
 class PictureButton(ToggleButtonBehavior, Image):
     pass
 
+class LiveButton(ToggleButton):
+    def push_down(self):
+        self.state = "down"
+        root.ids._camera_view.turn_live_on()
+
+    def push_up(self):
+        self.state = "normal"
+        root.ids._camera_view.turn_live_off()
+
 class TouchyImage(PictureButton):
-    def __init__(self, source, camera_view , **kwargs):
+    def __init__(self, source, filename, prev, next, camera_view, filmstrip, **kwargs):
         PictureButton.__init__(self, **kwargs)
+        # the filename of the image, full path, small version
         self.source = source
+        # the filename of the image, full path, large version
+        self.filename = filename
         width = 100
         image = cv2.imread(source, cv2.IMREAD_COLOR)
         image = cv2.flip(image, 0)
@@ -105,40 +158,240 @@ class TouchyImage(PictureButton):
         buf2 = border_image.tobytes()
         img1_texture.blit_buffer(buf1, colorfmt='bgr', bufferfmt='ubyte')
         img2_texture.blit_buffer(buf2, colorfmt='bgr', bufferfmt='ubyte')
+        # the cv2 version of the image
         self.image = image
+        # a drawable version of the image
         self.regular_image = img1_texture
+        # a version of the image with a border
         self.selected_image = img2_texture
+        # a pointer to the large central view of the window
         self.camera_view = camera_view
+        # linked list pointers
+        self.prev = prev
+        self.next = next
+        self.filmstrip = filmstrip
 
     def set_camera_view(self, camera_view):
+        """ Define a pointer to the large central view of the window """
         self.camera_view = camera_view
 
     def on_state(self, widget, value):
+        """ Respond to clicks on the image by selecting and outlining """
         print("Touched", self.source, value)
+        toggle_button = root.ids._live_button
+
         print(self.state)
         with self.canvas:
             # Add a red color
             if value == 'down':
-                self.texture = self.selected_image
-                self.camera_view.set_selected_overlay(self.image)
-
+                self.select_image()
+                toggle_button.push_up()
             if value == 'normal':
-                self.texture = self.regular_image
+                self.deselect_image()    
+                toggle_button.push_down()
+
+
+    def select_image(self):
+        self.texture = self.selected_image
+        self.state = "down"
+        # load the selected image in the large view
+        self.camera_view.set_selected_preview(self.image)
+        # and as the overlay
+        self.camera_view.set_selected_overlay(self.image)
+        self.camera_view.image_is_selected = True
+
+
+        print("Selecting image, ", self)
+        self.filmstrip.selected_widget = self
+        print("Selected image, ", self.filmstrip.selected_widget)
+
+    def deselect_image(self):
+        self.texture = self.regular_image
+        print("Deselecting image")
+        self.filmstrip.selected_widget = None
+
+
 
 class FilmStrip(ScrollView):
     def my_init(self, dirname = ".", camera_view=None):
         self.camera_view = camera_view
-        self.update(dirname)
+        self.image_list = []
 
-    def update(self, dirname):
-        files = sorted(glob.glob(f"{dirname}/*.jpg"))
+        self._keyboard = Window.request_keyboard(self._keyboard_closed, self)
+        self._keyboard.bind(on_key_down=self._on_keyboard_down)
+        self.undelete_list = []
+        self.contents = []
+
+    def _keyboard_closed(self):
+        self._keyboard.unbind(on_key_down=self._on_keyboard_down)
+        self._keyboard = None
+
+    def _on_keyboard_down(self, keyboard, keycode, text, modifiers):
+        if keycode[1] == 'right':
+            print("next")
+            self.select_next()
+        elif keycode[1] == 'left':
+            print("prev")
+            self.select_prev()
+            print("selected = ", self.selected_widget)
+        elif (keycode[1] == 'delete' or keycode[1] == 'backspace'):
+            print("delete")
+            self.delete_current()
+        elif (keycode[1] == 'z'):
+            print("undelete")
+            self.undelete()
+        else:
+            print(keycode[1])
+        return True
+
+    def load_folder(self, dirname):
+        """ Load the project in folder dirname, which
+        must be in app_dir and start with projects/ """
+
+        os.chdir(app_dir)
+
+        try:
+            map = open(f"{dirname}/map.txt", "r")
+            self.dirname = dirname
+        except:
+            print(f"No map.txt file in {app_dir}/{dirname}")
+            return
+        self.delete_all()
+        files = map.readlines()
+        files = [f"{dirname}/small-{f.strip()}" for f in files]
         print(files)
-        contents = [TouchyImage(source = x, 
+        self.image_list = [x for x in files]
+        self.update()
+
+    def write_map_file(self):
+        if self.dirname:
+           map = open(f"{self.dirname}/map.txt", "w")
+           pass
+        else:
+            return
+        for file in self.image_list:
+            entry = os.path.basename(file).replace("small-","") + "\n"
+            map.write(entry)
+        map.close()
+
+    def update(self):
+        self.contents = [TouchyImage(source = x,
+                            filename = x.replace("small-", ""),
+                            next = None,
+                            prev = None,
                             camera_view = self.camera_view,
+                            filmstrip = self,
                             size_hint=(None, None), 
-                            size=(dp(90),dp(60))) for x in files]
-        for c in contents:
+                            size=(dp(90),dp(60))) for x in self.image_list]
+        self.fix_pointers()   
+        for c in self.contents:
             self.ids._layout.add_widget(c)
+
+        if (len(self.contents) > 0) :
+            self.selected_widget = self.contents[-1]
+            self.selected_widget.select_image()
+        else:
+            self.selected_widget = None
+    def fix_pointers(self):
+        prev_widget = None
+        minus_2 = None
+        for c in self.contents:
+            if prev_widget is not None:
+                prev_widget.next = c
+                prev_widget.prev = minus_2
+            minus_2, prev_widget = prev_widget, c
+        if len(self.contents) > 1:
+            self.contents[-1].prev = self.contents[-2]
+         
+    def select_next(self):
+        print("Advanced to next")
+        current = self.selected_widget
+        if current:
+            next = current.next
+            if next is not None:
+                current.deselect_image()
+                next.select_image()
+
+    def select_prev(self):   
+        print("Advanced to prev")
+        current = self.selected_widget
+        if current:
+            print("select_prev, current = ", current)
+            prev = current.prev
+            print("select_prev, prev = ", prev)
+            if prev is not None:
+                current.deselect_image()
+                prev.select_image()
+
+    def delete_all(self):
+        if not self.contents:
+            return
+        for c in list(self.contents):
+            self.ids._layout.remove_widget(c)
+            self.contents.remove(c)
+            self.image_list.remove(c.source)
+
+    def delete_current(self):
+        current = self.selected_widget
+        if current is None:
+            return
+        if current.prev is not None:
+            current.prev.next = current.next
+        if current.next is not None:
+            current.next.prev = current.prev
+            self.select_next()
+        else:
+            self.select_prev()
+        self.ids._layout.remove_widget(current)
+        self.contents.remove(current)
+        self.image_list.remove(current.source)
+        self.undelete_list.append((current, current.prev))
+        self.write_map_file()
+
+    def insert_after(self, new_elt, prev_elt):
+        if prev_elt is not None and len(self.contents) > 0:
+            for (i,c) in enumerate(self.contents):
+                if c.source == prev_elt.source:
+                    break
+            loc = i+1
+        else:
+            loc = 0
+        if loc < len(self.contents):
+            self.contents.insert(loc, new_elt)
+            self.image_list.insert(loc, new_elt.source)
+            self.ids._layout.add_widget(new_elt, index = len(self.contents) - loc -1)
+        else:
+            self.contents.append(new_elt)
+            self.image_list.append(new_elt.source)
+            self.ids._layout.add_widget(new_elt)
+
+        for c in self.contents:
+            print(c.source)
+        self.fix_pointers()
+        if self.selected_widget:
+            self.selected_widget.deselect_image()
+        new_elt.select_image()
+        self.write_map_file()
+
+    def insert_after_selected(self, new_elt):
+        prev_elt = self.selected_widget
+        if prev_elt == None and len(self.contents) > 0:
+            prev_elt = self.contents[-1]
+        self.insert_after(new_elt, prev_elt)
+
+    def undelete(self):
+        if self.undelete_list is None or len(self.undelete_list) < 1:
+            return
+        elt, prev = self.undelete_list.pop()
+        self.insert_after(elt, prev)
+        elt.select_image()
+    
+    def export(self, event):
+        for c, i in enumerate(self.contents):
+            fromt = i.filename
+            tot = os.path.dirname(fromt) + "/exports/" + "file" + f"{c:04}.jpg"
+            os.system(f"cp {fromt} {tot}")
+            print(f"exporting {fromt}")
 
     def pressed(self, instance, touch):
         print("Pressed ", instance.source)
@@ -155,47 +408,86 @@ class AppLayout(BoxLayout):
     pass
 
 class StopMotionApp(App):
+
     def build(self):
-        layout = AppLayout()
-        print("******", layout.ids)
+        global root
+        global app_dir
+        global project_dir
+
+        Window.size = (1440, 1080)
+        Window.left = 0
+        Window.top = 0
+
+        app_dir = os.getcwd()
+
+        self.layout = AppLayout()
+        root = self.layout
+        print("******", self.layout.ids)
         self.camera = Nikon()
-        self.camera_view = layout.ids._camera_view
+        self.camera_view = self.layout.ids._camera_view
+        self.film_strip = self.layout.ids._film_strip
+        self.load_button = self.layout.ids._load_button
 
-        layout.ids._camera_view.my_init(camera = self.camera, fps = 30)
-        layout.ids._film_strip.my_init(camera_view = 
+        self.layout.ids._camera_view.my_init(camera = self.camera, fps = 30)
+        self.layout.ids._film_strip.my_init(camera_view = 
                 self.camera_view)
-        layout.ids._fstop_chooser.values = self.camera.get_fstops()
-        layout.ids._fstop_chooser.text = self.camera.get_fstop()
-        layout.ids._shutter_speed_chooser.values = self.camera.get_shutter_speeds()
-        layout.ids._shutter_speed_chooser.text = self.camera.get_shutter_speed()        
-        layout.ids._iso_chooser.values = self.camera.get_isos()
-        layout.ids._iso_chooser.text = self.camera.get_iso()
+        self.layout.ids._fstop_chooser.values = self.camera.get_fstops()
+        self.layout.ids._fstop_chooser.text = self.camera.get_fstop()
+        self.layout.ids._shutter_speed_chooser.values = self.camera.get_shutter_speeds()
+        self.layout.ids._shutter_speed_chooser.text = self.camera.get_shutter_speed()        
+        self.layout.ids._iso_chooser.values = self.camera.get_isos()
+        self.layout.ids._iso_chooser.text = self.camera.get_iso()
 
-        layout.ids._iso_chooser.bind(text = self.set_iso)
-        layout.ids._shutter_speed_chooser.bind(text = self.set_shutter_speed)
-        layout.ids._fstop_chooser.bind(text = self.set_iso)
+        self.layout.ids._iso_chooser.bind(text = self.set_iso)
+        self.layout.ids._shutter_speed_chooser.bind(text = self.set_shutter_speed)
+        self.layout.ids._fstop_chooser.bind(text = self.set_iso)
 
-        layout.ids._preview_button.bind(on_press = self.show_video_preview)
-        layout.ids._load_button.bind(on_press = self.show_load)
+        self.layout.ids._capture_button.bind(on_press = self.take_picture)
+        self.layout.ids._preview_button.bind(on_press = self.show_video_preview)
+        self.layout.ids._load_button.bind(on_press = self.show_load)
+        self.layout.ids._export_button.bind(on_press = self.film_strip.export)
+        self.layout.ids._live_button.bind(on_press = self.toggle_live_button)
 
-        self.dir = "."
-        self.film_strip = layout.ids._film_strip
-        self.load_button = layout.ids._load_button
+
+
+        self.film_strip.load_folder("projects/test-01")
 
         print("creating app")
-        return layout
+        return self.layout
 
     def show_video_preview(self, event):
         preview = PreviewVideo()
-        command_str = f"ffmpeg -y -framerate 2 \
-                    -pattern_type glob -i '{self.dir}/*.jpg' \
-                    -vf scale=600:400 -vcodec mjpeg -qscale 1 \
-                    tmp.avi"
-        print(command_str)
-        os.system(command_str)
-        popupWindow = Popup(title = "Preview", content=preview, size_hint=(None, None), size = (dp(800),dp(600) ))
-        popupWindow.open()
-        preview.ids._video_preview_button.bind(on_press = popupWindow.dismiss)
+        os.chdir(app_dir)
+        os.chdir(project_dir)
+        print("Now in directory: ", os.getcwd())
+        if not (os.path.exists("map.txt")):
+            print("No map file")
+            os.chdir(app_dir)
+            return
+        try:
+            print("Directory = ", os.getcwd())
+            files = open("map.txt","r").readlines()
+            ifile = open("input.txt", "w")
+            framerate = self.layout.ids._fps_slider.value
+            duration = 1/framerate
+            for f in files:
+                ifile.write(f"file {f.strip()}\n")
+                ifile.write(f"duration {duration}\n")
+            ifile.flush()
+            ifile.close()
+            command_str = f"ffmpeg -y -f concat -i input.txt -c:v libx264 -vf scale=600:400 -r 30 -pix_fmt yuv420p output.mp4"
+            print(command_str)
+            os.system(command_str)
+            os.system("cat input.txt > i.txt")
+            popupWindow = Popup(title = "Preview", content=preview, size_hint=(None, None), size = (dp(800),dp(600) ))
+            popupWindow.open()
+            preview.ids._video_player.source = f"{app_dir}/{project_dir}/output.mp4"
+            preview.ids._video_preview_button.bind(on_press = popupWindow.dismiss)
+        except Exception:
+            print("Unable to make preview")
+        finally:
+            os.chdir(app_dir)
+
 
     def set_iso(self, spinner, text):
         self.camera.set_iso(text)
@@ -215,22 +507,58 @@ class StopMotionApp(App):
                             size_hint=(0.4, 0.6))
         self._popup.open()
 
+    def toggle_live_button(self, event):
+        live_button = self.layout.ids._live_button
+        print("Live Button", live_button.state)
+
+        state = live_button.state
+        if live_button.state == 'down':
+            live_button.push_down()
+        elif live_button.state == 'normal':
+            live_button.push_up()
+
     def load(self, path, filename):
+        global project_dir
+
         print(f"path: {path} filename: {filename}")
         folder = os.path.basename(path)
-        self.dir = f"./projects/{folder}"
+        project_dir = f"projects/{folder}"
 
         self.load_button.text = folder
         self.dismiss_popup()
 
-        self.film_strip.update(self.dir)
+        self.film_strip.load_folder(project_dir)
         
     def take_picture(self, instance):
-        scale = 1.5
-        filepath = self.camera.capture_image()
-        self.new_pic.source = filepath
+
+        id = random.randint(1000000,9999999)
+        if self.camera.dummy:
+            filepath = "small-sample.jpg"
+        else:
+            filepath, smallpath = self.camera.capture_image()
+
+        if project_dir == "":
+            print("No Project Selected!")
+            return
+
+        os.system(f"cp {filepath} {project_dir}/capture-{id}.jpg")
+        os.system(f"cp {smallpath} {project_dir}/small-capture-{id}.jpg")
+ 
+        filepath = f"{project_dir}/capture-{id}.jpg"
+        smallpath = f"{project_dir}/small-capture-{id}.jpg"
+        
         new_image = cv2.imread(filepath)
-        self.camera_view.overlay = cv2.resize(new_image, (1536, 1020))
+        new_elt = TouchyImage(source = smallpath,
+                            filename = filepath,
+                            next = None,
+                            prev = None,
+                            camera_view = self.camera_view,
+                            filmstrip = self.film_strip,
+                            size_hint=(None, None),
+                            size=(dp(90),dp(60)))
+
+        self.film_strip.insert_after_selected(new_elt)
+        self.camera_view.overlay = cv2.resize(new_image, (LIVE_VIEW_WIDTH, LIVE_VIEW_HEIGHT))
         return None
 
     def on_stop(self):
