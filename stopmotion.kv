@@ -1,4 +1,7 @@
 #:kivy 2.1.0
+#:set font_size 12
+#:set font_size_bigger 16
+
 <FilmStrip>:
     size_hint: (1, None)
     height: dp(60)
@@ -27,6 +30,13 @@
 <SmallLabel@Label>:
     height: "30dp"
     size_hint: (1,None)
+
+<SectionLabel@Label>:
+    size_hint:(1, None)
+    height: dp(30)
+    font_size: dp(font_size_bigger)
+    valign: 'bottom'
+    bold: True
 
 <PreviewVideo>:
     orientation: "vertical"
@@ -83,71 +93,93 @@
             id: _film_strip
     BoxLayout:
         orientation: 'vertical'
-        width: "120dp"
-        size_hint: (None, 1)
+        width: "180dp"
+        height: "720dp"
+        size_hint: (None, None)
+        pos_hint: {'center_y': 0.5}
         StackLayout:
             orientation: 'lr-tb'
             spacing: "5dp"
             padding: "5dp"
-            size_hint: ( None, 1)
-            width: "120dp"
-            SmallLabel:
-                text: "F-stop"
-            Chooser:
-                id: _fstop_chooser
-            SmallLabel:
-                text: "Shutter"
-            Chooser:
-                id: _shutter_speed_chooser
-            SmallLabel:
-                text: "ISO"
-            Chooser:
-                id: _iso_chooser
-            SmallLabel:
+            size_hint: ( 1, 1)         
+            SectionLabel:
                 text: "Project"
             Button:
                 id: _load_button
                 text: "Open folder"
+                font_size: dp(font_size)
                 size_hint: (1,None)
                 height: dp(30)
             Button:
                 id: _export_button
                 text: "Export files"
+                font_size: dp(font_size)
                 size_hint: (1, None)
                 height: dp(30)
+        SectionLabel:
+            text: "Camera Settings"
+            
+        GridLayout:
+            rows: 3
+            cols: 2
+            spacing: "5dp"
+            padding: "5dp"
+            width: "240dp"
+            SmallLabel:
+                text: "F-stop"
+                font_size: dp(font_size)
+                size_hint: (1, None)
+                height: dp(20)
+            Chooser:
+                id: _fstop_chooser
+                font_size: dp(font_size)
+        
+            SmallLabel:
+                text: "Shutter"
+                font_size: dp(font_size)
+                size_hint: (1, None)
+                height: dp(20)
+            Chooser:
+                id: _shutter_speed_chooser
+                font_size: dp(font_size)
+        
+            SmallLabel:
+                text: "ISO"
+                font_size: dp(font_size)
+                size_hint: (1, None)
+                height: dp(20)
+            Chooser:
+                id: _iso_chooser
+                font_size: dp(font_size)
+
         StackLayout:
             orientation: 'lr-bt'
-            size_hint: (None, 1)
-            width: dp(120)
+            size_hint: (1, 1)
             padding: dp(5)
             spacing: dp(5)
             Button:
                 id: _capture_button
                 text: "Capture"
-                size_hint: (1, None)
-                height: dp(30)
-            Button:
-                id: _test_button
-                text: "Test Shot"
+                font_size: dp(font_size)
                 size_hint: (1, None)
                 height: dp(30)
             LiveButton:
                 id: _live_button
                 text: "Live"
+                font_size: dp(font_size)
                 size_hint: (1, None)
                 height: dp(30)
                 state: 'down'
-
+            SectionLabel:
+                text: "Actions"
         StackLayout:
             orientation: 'lr-bt'
             spacing: "5dp"
             padding: "5dp"
-            size_hint: ( None, None)
-            width: "120dp"
-            height: dp(200)
             Button:
                 id: _preview_button
                 text: "Preview"
+                font_size: dp(font_size)
                 height: dp(30)
                 size_hint: (1, None)
             Slider:
@@ -162,8 +194,12 @@
                 padding: dp(8)
             Label:
                 text: f"fps: {str(_fps_slider.value)}"
+                font_size: dp(font_size)
                 height: dp(24)
                 size_hint: (1, None)
+            SectionLabel:
+                text: "Preview"
+
 
 
         
