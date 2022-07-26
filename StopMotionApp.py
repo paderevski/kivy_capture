@@ -44,6 +44,7 @@ LIVE_VIEW_HEIGHT = 680
 root = None
 project_dir = ""
 app_dir = ""
+main_app = None
 
 class KivyCV(Image):
     def my_init(self, camera, fps):
@@ -240,6 +241,9 @@ class FilmStrip(ScrollView):
         elif (keycode[1] == 'z'):
             print("undelete")
             self.undelete()
+        elif (keycode[1] == 'spacebar'):
+            print("Capture!")
+            main_app.take_picture(None)
         else:
             print(keycode[1])
         return True
@@ -447,7 +451,7 @@ class StopMotionApp(App):
         self.layout.ids._load_button.bind(on_press = self.show_load)
         self.layout.ids._export_button.bind(on_press = self.film_strip.export)
         self.layout.ids._live_button.bind(on_press = self.toggle_live_button)
-
+        self.live_button = self.layout.ids._live_button
 
 
         self.film_strip.load_folder("projects/test-01")
@@ -533,7 +537,7 @@ class StopMotionApp(App):
 
         id = random.randint(1000000,9999999)
         if self.camera.dummy:
-            filepath = "small-sample.jpg"
+            filepath, smallpath = "sample.jpg", "small-sample.jpg"
         else:
             filepath, smallpath = self.camera.capture_image()
 
@@ -568,4 +572,5 @@ class StopMotionApp(App):
             self.camera.exit()
 
 if __name__ == "__main__":
-    StopMotionApp().run()
+    main_app = StopMotionApp()
+    main_app.run()
