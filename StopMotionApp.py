@@ -559,6 +559,8 @@ class StopMotionApp(App):
 
         self.film_strip.insert_after_selected(new_elt)
         self.camera_view.overlay = cv2.resize(new_image, (LIVE_VIEW_WIDTH, LIVE_VIEW_HEIGHT))
+        self.live_button.state = 'down'
+        self.live_button.push_down()    
         return None
 
     def on_stop(self):
