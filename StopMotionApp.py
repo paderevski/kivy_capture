@@ -15,6 +15,7 @@ from kivy.uix.togglebutton import ToggleButton
 from kivy.uix.label import Label
 from kivy.uix.gridlayout import GridLayout
 from kivy.core.window import Window
+from kivy.uix.modalview import ModalView
 
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.scrollview import ScrollView
@@ -45,6 +46,11 @@ root = None
 project_dir = ""
 app_dir = ""
 main_app = None
+
+def alert_box(info):
+    view = ModalView(size_hint=(None, None), size=(dp(400), dp(200)))
+    view.add_widget(Label(text=info))
+    view.open()
 
 class KivyCV(Image):
     def my_init(self, camera, fps):
@@ -222,6 +228,7 @@ class FilmStrip(ScrollView):
         self._keyboard.bind(on_key_down=self._on_keyboard_down)
         self.undelete_list = []
         self.contents = []
+        self.selected_widget = None
 
     def _keyboard_closed(self):
         self._keyboard.unbind(on_key_down=self._on_keyboard_down)
@@ -253,12 +260,12 @@ class FilmStrip(ScrollView):
         must be in app_dir and start with projects/ """
 
         os.chdir(app_dir)
+        self.dirname = dirname
 
         try:
             map = open(f"{dirname}/map.txt", "r")
-            self.dirname = dirname
         except:
-            print(f"No map.txt file in {app_dir}/{dirname}")
+            alert_box(f"No map.txt file in {app_dir}/{dirname}")
             return
         self.delete_all()
         files = map.readlines()
@@ -285,6 +292,7 @@ class FilmStrip(ScrollView):
            os.system(f"cp {map_file} {map_backup}")
            pass
         else:
+            alert_box("Unable to write map file at ", f"{app_dir}/{project_dir}/map.txt")
             return
         fps = root.ids._fps_slider.value
         fps = float(fps)
@@ -413,6 +421,7 @@ class FilmStrip(ScrollView):
             tot = os.path.dirname(fromt) + "/exports/" + "file" + f"{c:04}.jpg"
             os.system(f"cp {fromt} {tot}")
             print(f"exporting {fromt}")
+        alert_box("Export Done")
 
     def pressed(self, instance, touch):
         print("Pressed ", instance.source)
@@ -488,7 +497,7 @@ class StopMotionApp(App):
         os.chdir(project_dir)
         print("Now in directory: ", os.getcwd())
         if not (os.path.exists("map.txt")):
-            print("No map file")
+            alert_box("No map file")
             os.chdir(app_dir)
             return
         try:
@@ -511,7 +520,7 @@ class StopMotionApp(App):
             preview.ids._video_player.source = f"{app_dir}/{project_dir}/output.mp4"
             preview.ids._video_preview_button.bind(on_press = popupWindow.dismiss)
         except Exception:
-            print("Unable to make preview")
+            alert_box("Unable to make preview")
         finally:
             os.chdir(app_dir)
 
@@ -569,7 +578,7 @@ class StopMotionApp(App):
             filepath, smallpath = self.camera.capture_image()
 
         if project_dir == "":
-            print("No Project Selected!")
+            alert_box("No Project Selected!")
             return
 
         os.system(f"cp {filepath} {project_dir}/capture-{id}.jpg")
