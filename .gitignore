@@ -4,3 +4,5 @@ __pycache__
 *.psd
 *.avi
 env/
+projects/
+.DS_Store

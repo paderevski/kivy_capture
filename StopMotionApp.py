@@ -262,6 +262,16 @@ class FilmStrip(ScrollView):
             return
         self.delete_all()
         files = map.readlines()
+        try:
+            fps = files.pop(0)
+            fps = float(fps)
+            fps = max(min(fps,30),2)
+            root.ids._fps_slider.value = fps
+        except Exception as e:
+            print(e)
+            print("Unable to set fps from file")
+            if fps:
+                files.insert(0, fps)
         files = [f"{dirname}/small-{f.strip()}" for f in files]
         print(files)
         self.image_list = [x for x in files]
@@ -269,10 +279,17 @@ class FilmStrip(ScrollView):
 
     def write_map_file(self):
         if self.dirname:
-           map = open(f"{self.dirname}/map.txt", "w")
+           map_file = f"{self.dirname}/map.txt"
+           map_backup = f"{self.dirname}/map_bk.txt"
+           map = open(map_file, "w")
+           os.system(f"cp {map_file} {map_backup}")
            pass
         else:
             return
+        fps = root.ids._fps_slider.value
+        fps = float(fps)
+        map.write(f"{fps}\n")
+
         for file in self.image_list:
             entry = os.path.basename(file).replace("small-","") + "\n"
             map.write(entry)
@@ -427,10 +444,33 @@ class StopMotionApp(App):
         self.layout = AppLayout()
         root = self.layout
         print("******", self.layout.ids)
-        self.camera = Nikon()
+        
         self.camera_view = self.layout.ids._camera_view
         self.film_strip = self.layout.ids._film_strip
         self.load_button = self.layout.ids._load_button
+        self.connect_button = self.layout.ids._connect_button
+
+        self.connect_camera(None)
+        
+        self.connect_button.bind(on_press = self.connect_camera)
+        self.layout.ids._iso_chooser.bind(text = self.set_iso)
+        self.layout.ids._shutter_speed_chooser.bind(text = self.set_shutter_speed)
+        self.layout.ids._fstop_chooser.bind(text = self.set_iso)
+
+        self.layout.ids._capture_button.bind(on_press = self.take_picture)
+        self.layout.ids._preview_button.bind(on_press = self.show_video_preview)
+        self.layout.ids._load_button.bind(on_press = self.show_load)
+        self.layout.ids._export_button.bind(on_press = self.film_strip.export)
+        self.layout.ids._live_button.bind(on_press = self.toggle_live_button)
+        self.layout.ids._fps_slider.bind(on_touch_up = self.fps_changed)
+
+        self.live_button = self.layout.ids._live_button
+
+        print("creating app")
+        return self.layout
+
+    def connect_camera(self,event):
+        self.camera = Nikon()
 
         self.layout.ids._camera_view.my_init(camera = self.camera, fps = 30)
         self.layout.ids._film_strip.my_init(camera_view = 
@@ -441,23 +481,6 @@ class StopMotionApp(App):
         self.layout.ids._shutter_speed_chooser.text = self.camera.get_shutter_speed()        
         self.layout.ids._iso_chooser.values = self.camera.get_isos()
         self.layout.ids._iso_chooser.text = self.camera.get_iso()
-
-        self.layout.ids._iso_chooser.bind(text = self.set_iso)
-        self.layout.ids._shutter_speed_chooser.bind(text = self.set_shutter_speed)
-        self.layout.ids._fstop_chooser.bind(text = self.set_iso)
-
-        self.layout.ids._capture_button.bind(on_press = self.take_picture)
-        self.layout.ids._preview_button.bind(on_press = self.show_video_preview)
-        self.layout.ids._load_button.bind(on_press = self.show_load)
-        self.layout.ids._export_button.bind(on_press = self.film_strip.export)
-        self.layout.ids._live_button.bind(on_press = self.toggle_live_button)
-        self.live_button = self.layout.ids._live_button
-
-
-        self.film_strip.load_folder("projects/test-01")
-
-        print("creating app")
-        return self.layout
 
     def show_video_preview(self, event):
         preview = PreviewVideo()
@@ -532,7 +555,11 @@ class StopMotionApp(App):
         self.dismiss_popup()
 
         self.film_strip.load_folder(project_dir)
-        
+    
+    def fps_changed(self, event, x):
+        # fps = self.layout.ids._fps_slider.value
+        self.film_strip.write_map_file()
+
     def take_picture(self, instance):
 
         id = random.randint(1000000,9999999)
