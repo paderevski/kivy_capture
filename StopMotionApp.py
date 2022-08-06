@@ -229,6 +229,7 @@ class FilmStrip(ScrollView):
         self.undelete_list = []
         self.contents = []
         self.selected_widget = None
+        self.dirname = None
 
     def _keyboard_closed(self):
         self._keyboard.unbind(on_key_down=self._on_keyboard_down)
@@ -292,7 +293,7 @@ class FilmStrip(ScrollView):
            os.system(f"cp {map_file} {map_backup}")
            pass
         else:
-            alert_box("Unable to write map file at ", f"{app_dir}/{project_dir}/map.txt")
+            alert_box(f"Unable to write map file at {app_dir}/{project_dir}/map.txt")
             return
         fps = root.ids._fps_slider.value
         fps = float(fps)
@@ -565,9 +566,11 @@ class StopMotionApp(App):
 
         self.film_strip.load_folder(project_dir)
     
-    def fps_changed(self, event, x):
-        # fps = self.layout.ids._fps_slider.value
-        self.film_strip.write_map_file()
+    def fps_changed(self, event, touch):
+        fps = self.layout.ids._fps_slider.value
+        if touch.grab_current == self.layout.ids._fps_slider:
+            print("Writing fps value: ", fps)
+            self.film_strip.write_map_file()
 
     def take_picture(self, instance):
 
