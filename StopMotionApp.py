@@ -460,7 +460,6 @@ class StopMotionApp(App):
         self.load_button = self.layout.ids._load_button
         self.connect_button = self.layout.ids._connect_button
 
-        self.connect_camera(None)
         
         self.connect_button.bind(on_press = self.connect_camera)
         self.layout.ids._iso_chooser.bind(text = self.set_iso)
@@ -475,6 +474,7 @@ class StopMotionApp(App):
         self.layout.ids._fps_slider.bind(on_touch_up = self.fps_changed)
 
         self.live_button = self.layout.ids._live_button
+        self.connect_camera(None)
 
         print("creating app")
         return self.layout
@@ -491,6 +491,7 @@ class StopMotionApp(App):
         self.layout.ids._shutter_speed_chooser.text = self.camera.get_shutter_speed()        
         self.layout.ids._iso_chooser.values = self.camera.get_isos()
         self.layout.ids._iso_chooser.text = self.camera.get_iso()
+        self.live_button.push_down()
 
     def show_video_preview(self, event):
         preview = PreviewVideo()
@@ -508,6 +509,8 @@ class StopMotionApp(App):
             framerate = self.layout.ids._fps_slider.value
             duration = 1/framerate
             for f in files:
+                if "jpg" not in f:
+                    continue
                 ifile.write(f"file {f.strip()}\n")
                 ifile.write(f"duration {duration}\n")
             ifile.flush()
