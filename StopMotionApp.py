@@ -152,6 +152,9 @@ class TouchyImage(PictureButton):
                  cv2.BORDER_CONSTANT, 
                  value=(249,102,76)
               )
+        if image == None:
+            return
+
         border_image=cv2.resize(border_image, (image.shape[1],image.shape[0]))
         img1_texture = Texture.create(
             size = (image.shape[1], image.shape[0]), colorfmt='bgr'
@@ -258,7 +261,11 @@ class FilmStrip(ScrollView):
 
     def load_folder(self, dirname):
         """ Load the project in folder dirname, which
-        must be in app_dir and start with projects/ """
+        must be in app_dir and start with projects/ 
+        
+        Note: An empty project requires a map.txt file
+        containing exactly one line with the fps double
+        in the first line """
 
         os.chdir(app_dir)
         self.dirname = dirname
@@ -270,6 +277,8 @@ class FilmStrip(ScrollView):
             return
         self.delete_all()
         files = map.readlines()
+        files = [f.strip() for f in files]
+        files = [f for f in files if len(f)>0 and f[0] != "#"]
         try:
             fps = files.pop(0)
             fps = float(fps)
@@ -280,7 +289,7 @@ class FilmStrip(ScrollView):
             print("Unable to set fps from file")
             if fps:
                 files.insert(0, fps)
-        files = [f"{dirname}/small-{f.strip()}" for f in files]
+        files = [f"{dirname}/small-{f}" for f in files]
         print(files)
         self.image_list = [x for x in files]
         self.update()
@@ -318,10 +327,12 @@ class FilmStrip(ScrollView):
             self.ids._layout.add_widget(c)
 
         if (len(self.contents) > 0) :
+            print(self.contents)
             self.selected_widget = self.contents[-1]
             self.selected_widget.select_image()
         else:
             self.selected_widget = None
+
     def fix_pointers(self):
         prev_widget = None
         minus_2 = None
