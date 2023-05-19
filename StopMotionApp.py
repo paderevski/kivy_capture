@@ -152,7 +152,7 @@ class TouchyImage(PictureButton):
                  cv2.BORDER_CONSTANT, 
                  value=(249,102,76)
               )
-        if image == None:
+        if len(image)==0:
             return
 
         border_image=cv2.resize(border_image, (image.shape[1],image.shape[0]))
